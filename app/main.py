@@ -5,12 +5,17 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 
+from app.routers.doctors import router as doctors_router
+from app.routers.appointments import router as appointments_router
 
 app = FastAPI(
     title="Clinic Booking API",
     description="REST API for managing clinic appointments.",
     version="0.1.0",
 )
+
+app.include_router(doctors_router)
+app.include_router(appointments_router)
 
 
 @app.get("/")
