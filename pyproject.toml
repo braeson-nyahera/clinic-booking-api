@@ -1,0 +1,16 @@
+[project]
+name = "clinic-booking-api"
+version = "0.1.0"
+description = "Clinic appointment booking API"
+requires-python = "==3.12.*"
+dependencies = [
+    "fastapi[standard]",
+    "sqlalchemy",
+    "psycopg[binary]",
+    "pydantic-settings",
+    "python-dotenv",
+    "alembic",
+]
+
+[tool.fastapi]
+entrypoint = "app.main:app"
