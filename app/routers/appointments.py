@@ -40,10 +40,10 @@ def create_appointment(
     end_at = start_at + SLOT_DURATION
     now = datetime.now(CLINIC_TIMEZONE)
 
-    if start_at <= now:
+    if start_at < now + timedelta(hours=1):
         raise HTTPException(
             status_code=400,
-            detail="Appointments must be scheduled in the future",
+            detail="Appointments must be booked at least one hour in advance",
         )
 
     doctor = db.scalar(
@@ -161,3 +161,33 @@ def cancel_appointment(
 
     return appointment
 
+
+@router.get(
+    "/patients/{patient_id}/appointments",
+    response_model=list[AppointmentResponse],
+)
+def get_patient_upcoming_appointments(
+    patient_id: int,
+    db: Session = Depends(get_db),
+):
+    patient = db.get(Patient, patient_id)
+
+    if patient is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Patient not found",
+        )
+
+    now = datetime.now(CLINIC_TIMEZONE)
+
+    appointments = db.scalars(
+        select(Appointment)
+        .where(
+            Appointment.patient_id == patient_id,
+            Appointment.status == "booked",
+            Appointment.start_at > now,
+        )
+        .order_by(Appointment.start_at.asc())
+    ).all()
+
+    return appointments

@@ -7,6 +7,7 @@ from app.database import get_db
 
 from app.routers.doctors import router as doctors_router
 from app.routers.appointments import router as appointments_router
+from app.routers.patients import router as patients_router
 
 app = FastAPI(
     title="Clinic Booking API",
@@ -16,6 +17,7 @@ app = FastAPI(
 
 app.include_router(doctors_router)
 app.include_router(appointments_router)
+app.include_router(patients_router)
 
 
 @app.get("/")
