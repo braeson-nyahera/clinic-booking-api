@@ -1,86 +1,77 @@
 # Clinic Booking API
 
-A REST API built with **FastAPI, SQLAlchemy, and PostgreSQL** for managing clinic appointments. The system allows patients to book, cancel, and reschedule appointments while checking doctor availability and working hours.
+A REST API for managing clinic appointments, built with Python, FastAPI, SQLAlchemy, and PostgreSQL. The system supports doctor availability, appointment booking, cancellation, rescheduling, and patient appointment history.
 
-## Features
+## Project Overview
 
-- Retrieve available 30-minute appointment slots for a doctor on a specific date.
-- Book appointments within a doctor's configured working hours.
-- Prevent overlapping appointments for the same doctor.
-- Enforce a minimum one-hour advance-booking window.
-- Cancel appointments with a recorded cancellation reason.
-- Reschedule appointments after validating the new time slot.
+The API is designed for a clinic with five doctors and 30-minute appointment slots. It validates appointment requests against doctors' working hours, prevents conflicting bookings, and enforces a minimum one-hour advance-booking window.
+
+### Features
+
+- Retrieve available 30-minute slots for a doctor on a specific date.
+- Book appointments within configured working hours.
+- Prevent double booking.
+- Reject appointments in the past or with insufficient advance notice.
+- Cancel appointments with a recorded reason.
+- Reschedule appointments after validating the requested slot.
 - Retrieve a patient's upcoming appointments in chronological order.
-- Validate request data and return meaningful HTTP status codes.
-- Persist application data in PostgreSQL hosted on Neon.
-- Manage database schema changes with Alembic migrations.
+- Validate request data and return meaningful HTTP errors.
+- Store application data in Neon PostgreSQL.
+- Manage database schema changes with Alembic.
 - Provide interactive API documentation through Swagger UI.
 
 ## Technology Stack
 
-- **Language:** Python
-- **API framework:** FastAPI
-- **ORM:** SQLAlchemy
-- **Database:** PostgreSQL (Neon)
-- **Validation:** Pydantic
-- **Database migrations:** Alembic
-- **Testing:** Pytest
-- **ASGI server:** Uvicorn
+| Technology | Purpose |
+|---|---|
+| Python 3.12 | Programming language |
+| FastAPI | REST API framework |
+| SQLAlchemy | Database ORM |
+| PostgreSQL (Neon) | Persistent data storage |
+| Pydantic | Request validation and settings |
+| Alembic | Database migrations |
+| Pytest | Automated testing |
+| Uvicorn | ASGI application server |
+| GitHub Actions | CI/CD automation |
+| FastAPI Cloud | Application hosting |
 
 ## Project Structure
 
 ```text
 clinic-booking-api/
+├── .github/
+│   └── workflows/
+│       ├── deploy.yml
+│       └── tests.yml
 ├── app/
 │   ├── main.py
 │   ├── config.py
 │   ├── database.py
 │   ├── models/
-│   │   ├── __init__.py
-│   │   ├── doctor.py
-│   │   ├── patient.py
-│   │   ├── working_hours.py
-│   │   └── appointment.py
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   ├── availability.py
-│   │   └── appointment.py
-│   └── routers/
-│       ├── __init__.py
-│       ├── doctors.py
-│       ├── appointments.py
-│       └── patients.py
+│   ├── routers/
+│   └── schemas/
 ├── migrations/
-├── tests/
 ├── scripts/
 │   └── seed_data.py
+├── tests/
+├── .env.example
 ├── alembic.ini
+├── pyproject.toml
 ├── requirements.txt
-├── .gitignore
+├── check_db_connection.py
 └── README.md
 ```
 
 ## Data Model
 
-The application uses four primary database entities.
+The application uses four primary entities.
 
-### Doctor
+- **Doctor:** Stores doctor details, specialty, and active status.
+- **Patient:** Stores patient details and a unique email address.
+- **WorkingHours:** Defines a doctor's weekly schedule.
+- **Appointment:** Stores the doctor, patient, appointment time, status, and cancellation reason.
 
-Stores doctor information, including name, specialty, and active status.
-
-### Patient
-
-Stores patient information, including name and unique email address.
-
-### WorkingHours
-
-Defines each doctor's working schedule using the day of the week, start time, and end time.
-
-### Appointment
-
-Stores appointment details, including doctor, patient, start time, end time, booking status, and cancellation reason.
-
-Appointments have a fixed duration of 30 minutes. Clinic dates and times use the `Africa/Nairobi` timezone.
+Appointments have a fixed duration of 30 minutes. Clinic scheduling uses the `Africa/Nairobi` timezone.
 
 ## API Endpoints
 
@@ -89,17 +80,17 @@ Appointments have a fixed duration of 30 minutes. Clinic dates and times use the
 | GET | `/` | Root endpoint |
 | GET | `/health` | Application health check |
 | GET | `/health/db` | Database connectivity check |
-| GET | `/doctors/{doctor_id}/availability?date=YYYY-MM-DD` | Retrieve available appointment slots |
+| GET | `/doctors/{doctor_id}/availability?date=YYYY-MM-DD` | Retrieve available slots |
 | POST | `/appointments` | Book an appointment |
 | PATCH | `/appointments/{appointment_id}/cancel` | Cancel an appointment |
 | PATCH | `/appointments/{appointment_id}/reschedule` | Reschedule an appointment |
 | GET | `/patients/{patient_id}/appointments` | Retrieve upcoming patient appointments |
 
-### Booking an Appointment
-
-**Request**
+### Book an Appointment
 
 `POST /appointments`
+
+Request body:
 
 ```json
 {
@@ -109,13 +100,13 @@ Appointments have a fixed duration of 30 minutes. Clinic dates and times use the
 }
 ```
 
-The requested time must include a timezone, be sufficiently far in the future, fall within the doctor's working hours, and not overlap another active appointment.
+The requested time must include a timezone, be sufficiently far in the future, fall within the doctor's working hours, and not conflict with another active booking.
 
-### Cancelling an Appointment
+### Cancel an Appointment
 
-**Request**
+`PATCH /appointments/{appointment_id}/cancel`
 
-`PATCH /appointments/1/cancel`
+Request body:
 
 ```json
 {
@@ -123,13 +114,13 @@ The requested time must include a timezone, be sufficiently far in the future, f
 }
 ```
 
-Cancellation updates the appointment status and records the reason. Cancelled appointments no longer block availability.
+The cancellation reason is recorded, and the cancelled appointment no longer blocks availability. An appointment that has already been cancelled cannot be cancelled again.
 
-### Rescheduling an Appointment
+### Reschedule an Appointment
 
-**Request**
+`PATCH /appointments/{appointment_id}/reschedule`
 
-`PATCH /appointments/1/reschedule`
+Request body:
 
 ```json
 {
@@ -137,50 +128,46 @@ Cancellation updates the appointment status and records the reason. Cancelled ap
 }
 ```
 
-The new slot must satisfy the appointment scheduling rules and must not conflict with another active booking.
+The new slot must satisfy the scheduling rules and must not conflict with another active booking. Cancelled appointments cannot be rescheduled.
 
-## HTTP Status Codes
+### HTTP Status Codes
 
-| Status code | Meaning |
+| Status | Meaning |
 |---|---|
 | `200 OK` | Request completed successfully |
 | `201 Created` | Appointment created successfully |
 | `400 Bad Request` | Scheduling rule violated |
-| `404 Not Found` | Requested doctor, patient, or appointment not found |
-| `409 Conflict` | Appointment slot unavailable or appointment already cancelled |
+| `404 Not Found` | Requested resource not found |
+| `409 Conflict` | Slot unavailable or appointment already cancelled |
 | `422 Unprocessable Entity` | Request validation failed |
 | `500 Internal Server Error` | Unexpected server-side error |
 
-## Prerequisites
+## Local Setup
 
-- Python 3.10 or later
-- pip
-- A PostgreSQL database, such as Neon
+### Prerequisites
+
+- Python 3.12
 - Git
-
-## Local Installation
+- A PostgreSQL database, such as Neon
 
 ### 1. Clone the repository
 
-Replace the placeholder with the actual repository URL.
-
 ```bash
-git clone YOUR_GITHUB_REPOSITORY_URL
+git clone https://github.com/braeson-nyahera/clinic-booking-api.git
 cd clinic-booking-api
 ```
 
-### 2. Create and activate a virtual environment
-
-On Linux:
+### 2. Create a virtual environment
 
 ```bash
-python3 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate
 ```
 
 ### 3. Install dependencies
 
 ```bash
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
@@ -189,12 +176,12 @@ pip install -r requirements.txt
 Create a `.env` file in the project root:
 
 ```env
-DATABASE_URL=your_neon_postgresql_connection_string
+DATABASE_URL=your_postgresql_connection_string
 ```
 
-Use the PostgreSQL connection string format supported by the application's SQLAlchemy driver. Ensure Neon SSL requirements are satisfied.
+Use the connection string format supported by the application's SQLAlchemy driver and configure SSL as required by your database provider.
 
-**Security:** Never commit `.env` or publish database credentials. Configure secrets through environment variables in production.
+**Security:** Never commit `.env` or expose database credentials. Use environment variables or platform secrets in production.
 
 ### 5. Apply database migrations
 
@@ -202,17 +189,17 @@ Use the PostgreSQL connection string format supported by the application's SQLAl
 alembic upgrade head
 ```
 
-This creates or updates the database schema using the project's migration history.
+This applies the database schema changes defined in the migration history.
 
 ### 6. Add sample data
 
-If the seed script is included in the repository:
+If the database has not been seeded, run:
 
 ```bash
 python -m scripts.seed_data
 ```
 
-The script creates sample doctor, patient, and working-hours records if they do not already exist.
+The seed script creates sample doctor, patient, and working-hours records if they do not already exist.
 
 ### 7. Start the application
 
@@ -220,69 +207,71 @@ The script creates sample doctor, patient, and working-hours records if they do 
 uvicorn app.main:app --reload
 ```
 
-The API will be available locally at:
+The local API will be available at `http://127.0.0.1:8000`.
 
-`http://127.0.0.1:8000`
+Interactive documentation: `http://127.0.0.1:8000/docs`
 
-Interactive documentation:
-
-`http://127.0.0.1:8000/docs`
-
-Alternative API documentation:
-
-`http://127.0.0.1:8000/redoc`
+Alternative documentation: `http://127.0.0.1:8000/redoc`
 
 ## Testing
 
-Run the automated tests from the project root:
+Run automated tests from the project root:
 
 ```bash
-pytest -v
+python -m pytest -v
 ```
 
-The test suite should cover application health, request validation, availability, booking, cancellation, rescheduling, and error responses.
+Compile the application modules with:
 
-Tests that write to the configured Neon database can create or modify persistent records. Use them carefully and clean up any deliberately created test data.
+```bash
+python -m compileall app
+```
+
+The standalone database connectivity check can be run separately:
+
+```bash
+python check_db_connection.py
+```
+
+**Database safety:** Tests or scripts that connect to Neon may create or modify persistent data. Review their behavior before running them against a production database.
 
 ## Deployment
 
-The application is intended to be deployed to a public application hosting platform, with Neon PostgreSQL providing persistent database storage.
+The application is hosted on FastAPI Cloud, with Neon PostgreSQL providing persistent storage.
 
-Production configuration should include:
+- **Public API URL:** https://clinic-booking-api.fastapicloud.dev/
+- **Swagger UI:** https://clinic-booking-api.fastapicloud.dev/docs
 
-- A valid `DATABASE_URL` environment variable.
-- Database migrations applied before or during deployment.
-- A production ASGI server command.
-- A public health endpoint for deployment checks.
-- Database credentials stored as platform secrets rather than in source code.
-
-**Deployment platform:** To be added after deployment.
-
-**Public API URL:** To be added after deployment.
-
-**Swagger documentation URL:** `YOUR_PUBLIC_API_URL/docs`
+Configure `DATABASE_URL` in the hosting platform's environment variables or secrets. Ensure the database migrations have been applied and the deployed application starts successfully.
 
 ## CI/CD
 
-The planned GitHub Actions workflow will:
+The repository contains two GitHub Actions workflows.
 
-1. Install Python dependencies.
-2. Run automated tests on pull requests.
-3. Prevent broken changes from being merged when required checks fail.
-4. Deploy the application automatically after changes are merged into the main branch.
+### Continuous Integration
 
-The final README should identify the actual workflow and deployment platform once configured.
+The `tests.yml` workflow is configured to run on pushes to `master` and pull requests targeting `master`. It installs dependencies, compiles the application, and runs the automated test suite.
+
+### Continuous Deployment
+
+The `deploy.yml` workflow is configured to deploy to FastAPI Cloud on pushes to `master`. It uses the `FASTAPI_CLOUD_TOKEN` and `FASTAPI_CLOUD_APP_ID` GitHub repository secrets.
+
+The deployment workflow requires valid credentials. Confirm that the latest workflow run succeeds before describing automatic deployment as fully verified.
+
+Workflow runs: https://github.com/braeson-nyahera/clinic-booking-api/actions
 
 ## AI Assistance Reflection
 
-AI assistance was used during development to help structure the FastAPI application, explain SQLAlchemy models and database migrations, and implement endpoint validation and error handling.
+AI assistance was used during development to help structure the FastAPI application, explain SQLAlchemy models and Alembic migrations, and implement endpoint validation and error handling.
 
-The generated code was reviewed and tested throughout implementation. AI-generated suggestions were treated as development assistance rather than automatically assumed to be correct.
+The suggestions were reviewed and tested during implementation rather than accepted automatically. Particular care was required around timezone-aware scheduling, appointment conflicts, cancellation and rescheduling rules, database connectivity, and automated testing.
 
-Areas requiring particular care include concurrent booking requests, database transaction safety, timezone-aware date handling, validation of working-hour configurations, and automated tests for both successful and unsuccessful operations.
+AI assistance helped accelerate development and clarify unfamiliar concepts. The developer remains responsible for verifying the implementation, protecting credentials, testing edge cases, and confirming the behavior of the deployed application.
 
-AI assistance helped accelerate implementation and explain unfamiliar concepts. The developer remains responsible for verifying correctness, protecting database credentials, testing edge cases, and ensuring the deployed application behaves as expected.
+- [AI Usage and Decision Log](AI_USAGE.md)
 
-## Project Status
+## Project Links
 
-The core API endpoints have been implemented, and the existing test suite has passed locally. Public deployment, CI/CD verification, and expanded workflow testing should be marked complete only after they have been successfully verified.
+- **GitHub repository:** https://github.com/braeson-nyahera/clinic-booking-api
+- **Public API:** https://clinic-booking-api.fastapicloud.dev
+- **API documentation:** https://clinic-booking-api.fastapicloud.dev/docs
